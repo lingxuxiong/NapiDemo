@@ -29,6 +29,12 @@ struct Index {
         Button("Print Image")
           .onClick(() => {
 
+            DemoSDK.asyncWork(1024).then((result) => {
+              hilog.info(0x0000, LOG_TAG, 'async result %{public}d', result);
+            }).catch((error : Error) => {
+              hilog.error(0x0000, LOG_TAG, 'failed to get async task due to error: ' + error.message);
+            });
+
             // copy the sample raw file to external storage to simulate the file to print
             ImageUtils.copyRawFile(getContext(this), SAMPLE_FILE_NAME);
 
@@ -48,12 +54,12 @@ struct Index {
                   let len = pm.getPixelBytesNumber()
                   let data = new ArrayBuffer(len)
                   pm.readPixelsToBuffer(data).then( () => {
-                    console.log('Succeeded in reading image pixel data.');
+                    hilog.error(0x0000, LOG_TAG, 'Succeeded in reading image pixel data.');
                   }).catch((error : Error) => {
-                    console.error('failed to read image pixel data due to error: ' + error.message);
+                    hilog.error(0x0000, LOG_TAG, 'failed to read image pixel data due to error: ' + error.message);
                   });
                 }).catch((error : Error) => {
-                  console.error('failed to read pixel map due to error: ' + error.message);
+                  hilog.error(0x0000, LOG_TAG, 'failed to read pixel map due to error: ' + error.message);
                 });
 
                 // return fake data

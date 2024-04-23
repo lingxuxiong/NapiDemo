@@ -34,6 +34,58 @@ static napi_value Add(napi_env env, napi_callback_info info)
 
 }
 
+struct CallbackData {
+    napi_async_work asyncWork = nullptr;
+    napi_deferred deferred = nullptr;
+    napi_ref callback = nullptr;
+    int args = 0;
+    int result = 0;
+};
+
+static void ExecuteCB(napi_env env, void *data) {
+    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
+    callbackData->result = callbackData->args;
+    OH_LOG_DEBUG(LOG_APP, "async task ended up with result: %{public}d", callbackData->result);
+}
+
+static void CompleteCB(napi_env env, napi_status status, void *data) {
+    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
+    napi_value result = nullptr;
+    napi_create_int32(env, callbackData->result, &result);
+    callbackData->result > 0 ? napi_resolve_deferred(env, callbackData->deferred, result)
+                             : napi_reject_deferred(env, callbackData->deferred, result);
+
+    napi_delete_async_work(env, callbackData->asyncWork);
+
+    OH_LOG_DEBUG(LOG_APP, "complete async task");
+
+    delete callbackData;
+}
+
+static napi_value AsyncWork(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    napi_value promise = nullptr;
+    napi_deferred deferred = nullptr;
+    napi_create_promise(env, &deferred, &promise);
+
+    auto callbackData = new CallbackData();
+    callbackData->deferred = deferred;
+    napi_get_value_int32(env, args[0], &callbackData->args);
+
+    napi_value resourceName = nullptr;
+    napi_create_string_utf8(env, "AsyncCallback", NAPI_AUTO_LENGTH, &resourceName);
+
+    napi_create_async_work(env, nullptr, resourceName, ExecuteCB, CompleteCB, callbackData, &callbackData->asyncWork);
+    napi_queue_async_work(env, callbackData->asyncWork);
+
+    OH_LOG_DEBUG(LOG_APP, "created async task");
+
+    return promise;
+}
+
 static napi_value Print(napi_env env, napi_callback_info info) {
 
     napi_status status;
@@ -87,7 +139,7 @@ static napi_value Print(napi_env env, napi_callback_info info) {
             OH_LOG_DEBUG(LOG_APP, "data[%{public}zu]: %{public}d", i, dataArr[i]);
         }
     }
-
+    
     return 0;
 }
 
@@ -96,7 +148,8 @@ static napi_value Init(napi_env env, napi_value exports)
 {
     napi_property_descriptor desc[] = {
         { "add", nullptr, Add, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "asyncWork", nullptr, AsyncWork, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;
