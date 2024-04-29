@@ -1,9 +1,9 @@
 #include "hello.h"
-#include "async.h"
+#include "promise.h"
 #include <cstddef>
 #include <cstdlib>
-
-typedef napi_value (*PromiseHandler)(napi_env env, napi_callback_info info);
+#include <hilog/log.h>
+#include <cstring>
 
 static napi_value handleFileDataPromise(napi_env env, napi_callback_info info) 
 {
@@ -65,7 +65,7 @@ static napi_value rejectPromise(napi_env env, napi_callback_info info)
     return nullptr;
 }
 
-static napi_value handlePromise(napi_env env, napi_value promise, PromiseHandler resolve, PromiseHandler reject) 
+napi_value handlePromise(napi_env env, napi_value promise, PromiseHandler resolve, PromiseHandler reject) 
 {
     bool isPromise = false;
     napi_is_promise(env, promise, &isPromise);    
@@ -110,7 +110,7 @@ static napi_value handlePromise(napi_env env, napi_value promise, PromiseHandler
     return nullptr;
 }
 
-static napi_value consumePromise(napi_env env, napi_callback_info info) 
+napi_value consumePromise(napi_env env, napi_callback_info info) 
 { 
     napi_status status;
 

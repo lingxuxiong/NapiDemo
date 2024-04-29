@@ -7,15 +7,12 @@
 #ifndef NAPIDEMO_HELLO_H
 #define NAPIDEMO_HELLO_H
 
-#include "napi/native_api.h"
 #include <assert.h>
-#include <cstring>
 
 #undef LOG_DOMAIN
 #undef LOG_TAG
 #define LOG_DOMAIN 0x0001
 #define LOG_TAG "NapiDemo"
-#include <hilog/log.h>
 
 #define ARLEN(a) sizeof(a) / sizeof(a[0])
 
