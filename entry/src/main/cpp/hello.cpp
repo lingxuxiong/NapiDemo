@@ -1,6 +1,5 @@
 #include "napi/native_api.h"
 #include <assert.h>
-#include <bits/alltypes.h>
 
 #undef LOG_DOMAIN
 #undef LOG_TAG
@@ -9,6 +8,8 @@
 #include <hilog/log.h>
 
 #define ARLEN(a) sizeof(a)/sizeof(a[0])
+
+typedef napi_value (*CALLBACK)(napi_env env, napi_callback_info info);
 
 struct CallbackData {
     napi_async_work asyncWork = nullptr;
@@ -128,6 +129,69 @@ static napi_value Add(napi_env env, napi_callback_info info)
 
 }
 
+static napi_value resolveCallback(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    
+    size_t len = 0;
+    char str[256] = {'\0'};
+    napi_get_value_string_utf8(env, args[0], str, ARLEN(str), &len);
+    OH_LOG_DEBUG(LOG_APP, "got formatted string %{public}s", str);
+    return nullptr;
+}
+
+static napi_value rejectCallback(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    
+    size_t len = 0;
+    char errorMessage[256] = {'\0'};
+    napi_get_value_string_utf8(env, args[0], errorMessage, ARLEN(errorMessage), &len);
+    OH_LOG_DEBUG(LOG_APP, "got error message: %{public}s", errorMessage);
+
+    return nullptr;
+}
+
+static napi_value handlePromise(napi_env env, napi_value promise, CALLBACK success, CALLBACK error) 
+{
+    bool isPromise = false;
+    napi_is_promise(env, promise, &isPromise);
+    OH_LOG_DEBUG(LOG_APP, "isPromise: %{public}d", isPromise);
+    if (!isPromise) {
+        return nullptr;
+    }
+
+    ///////////// Prepare to consume the promise /////////////
+
+    // 1. Get the then property of the target promise
+    napi_value promiseThen;
+    napi_get_named_property(env, promise, "then", &promiseThen);
+
+    // 2. Create the then function of the promise
+    napi_value promiseThenFunc;
+    napi_create_function(env, "thenFunc", NAPI_AUTO_LENGTH, success, nullptr, &promiseThenFunc);
+
+    // 3. Call the then function and return the call result
+    napi_value promiseResult;
+    napi_call_function(env, promise, promiseThen, 1, &promiseThenFunc, &promiseResult);
+
+
+    // 3. Catch promise error
+    napi_value promiseCatch;
+    napi_get_named_property(env, promise, "catch", &promiseCatch);
+
+    // 4. Create the catch function of the promise
+    napi_value promiseCatchFunc;
+    napi_create_function(env, "catchFunc", NAPI_AUTO_LENGTH, error, nullptr, &promiseCatchFunc);
+
+    // 5. Call the catch function and return the some error was caught
+    napi_call_function(env, promise, promiseCatch, 1, &promiseCatchFunc, &promiseResult);
+
+    return 0;
+}
+
 static napi_value Promise(napi_env env, napi_callback_info info) { 
     napi_status status;
 
@@ -156,63 +220,8 @@ static napi_value Promise(napi_env env, napi_callback_info info) {
     bool isPromise = false;
     napi_is_promise(env, promise, &isPromise);
     OH_LOG_DEBUG(LOG_APP, "isPromise: %{public}d", isPromise);
-
-    ///////////// Prepare to consume the promise /////////////
     
-    // 1. Get the then property of the target promise
-    napi_value promiseThen;
-    napi_get_named_property(env, promise, "then", &promiseThen);
-    
-    // 2. Construct the block of clause to be executing once 
-    // promise was resolved from the JS side.
-    auto promiseThenClause = [](napi_env env, napi_callback_info info) -> napi_value {
-        // 5. Parse the result from the resolve call on JS side
-        size_t argc = 1;
-        napi_value args[1] = { nullptr };
-        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-        
-        size_t len = 0;
-        char str[256] = {'\0'};
-        napi_get_value_string_utf8(env, args[0], str, ARLEN(str), &len);
-        OH_LOG_DEBUG(LOG_APP, "got formatted string %{public}s", str);
-        
-        return nullptr;
-    };
-    
-    // 3. Create the then function of the promise
-    napi_value promiseThenFunc;
-    napi_create_function(env, "thenFunc", NAPI_AUTO_LENGTH, promiseThenClause, nullptr, &promiseThenFunc);
-    
-    // 4. Call the then function and return the call result
-    napi_value promiseResult;
-    napi_call_function(env, promise, promiseThen, 1, &promiseThenFunc, &promiseResult);
-
-
-    // Catch promise error
-    napi_value promiseCatch;
-    napi_get_named_property(env, promise, "catch", &promiseCatch);
-    
-    auto rejectPromiseClause = [](napi_env env, napi_callback_info info) -> napi_value {
-        size_t argc = 1;
-        napi_value args[1] = {nullptr};
-        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-        
-        size_t len = 0;
-        char errorMessage[256] = {'\0'};
-        napi_get_value_string_utf8(env, args[0], errorMessage, ARLEN(errorMessage), &len);
-        OH_LOG_DEBUG(LOG_APP, "got error message: %{public}s", errorMessage);
-        
-        return nullptr;
-    };
-
-    // 3. Create the catch function of the promise
-    napi_value promiseCatchFunc;
-    napi_create_function(env, "catchFunc", NAPI_AUTO_LENGTH, rejectPromiseClause, nullptr, &promiseCatchFunc);
-
-    // 4. Call the catch function and return the some error was caught
-    napi_call_function(env, promise, promiseCatch, 1, &promiseCatchFunc, &promiseResult);
-
-    return 0;
+    return handlePromise(env, promise, resolveCallback, rejectCallback);
 }
 
 
