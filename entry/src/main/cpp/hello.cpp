@@ -112,6 +112,7 @@ static napi_value Promise(napi_env env, napi_callback_info info) {
 //         return undefined;
 //     };
     
+    return 0;
 }
 
 
