@@ -84,10 +84,8 @@ static napi_value Promise(napi_env env, napi_callback_info info) {
         char str[256] = {'\0'};
         napi_get_value_string_utf8(env, args[0], str, ARLEN(str), &len);
         OH_LOG_DEBUG(LOG_APP, "got formatted string %{public}s", str);
-
-        napi_value undefined;
-        napi_get_undefined(env, &undefined);
-        return undefined;
+        
+        return nullptr;
     };
     
     // 3. Create the then function of the promise
@@ -99,19 +97,30 @@ static napi_value Promise(napi_env env, napi_callback_info info) {
     napi_call_function(env, promise, promiseThen, 1, &promiseThenFunc, &promiseResult);
 
 
-    // catch promise error?
-//     auto rejectPromise = [](napi_env env, napi_callback_info info) -> napi_value {
-//         size_t argc = 1;
-//         napi_value args[1] = {nullptr};
-//         napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-//
-//         // deal with error returned from JS
-//
-//         napi_value undefined;
-//         napi_get_undefined(env, &undefined);
-//         return undefined;
-//     };
+    // Catch promise error
+    napi_value promiseCatch;
+    napi_get_named_property(env, promise, "catch", &promiseCatch);
     
+    auto rejectPromiseClause = [](napi_env env, napi_callback_info info) -> napi_value {
+        size_t argc = 1;
+        napi_value args[1] = {nullptr};
+        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+        
+        size_t len = 0;
+        char errorMessage[256] = {'\0'};
+        napi_get_value_string_utf8(env, args[0], errorMessage, ARLEN(errorMessage), &len);
+        OH_LOG_DEBUG(LOG_APP, "got error message: %{public}s", errorMessage);
+        
+        return nullptr;
+    };
+
+    // 3. Create the catch function of the promise
+    napi_value promiseCatchFunc;
+    napi_create_function(env, "catchFunc", NAPI_AUTO_LENGTH, rejectPromiseClause, nullptr, &promiseCatchFunc);
+
+    // 4. Call the catch function and return the some error was caught
+    napi_call_function(env, promise, promiseCatch, 1, &promiseCatchFunc, &promiseResult);
+
     return 0;
 }
 

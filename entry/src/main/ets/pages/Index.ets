@@ -9,7 +9,9 @@ let SAMPLE_FILE_NAME = "sample.jpg"
 @Entry
 @Component
 struct Index {
+
   @State message: string = 'Hello NAPI';
+  @State num: number = 0;
 
   build() {
     Row() {
@@ -28,10 +30,15 @@ struct Index {
 
         Button("Print Image")
           .onClick(() => {
-
-            DemoSDK.callWithPromise(10, (doubledNum: number) => {
+            this.num++;
+            DemoSDK.callWithPromise(this.num, (doubledNum: number) => {
               return new Promise<string>((resolve, reject) => {
-                resolve(doubledNum.toString());
+                hilog.info(0x0000, LOG_TAG, 'new counter value = %{public}d', this.num);
+                if (this.num % 2 == 0) {
+                  resolve("resolved: " + doubledNum.toString());
+                } else {
+                  reject("rejected: " + doubledNum.toString());
+                }
               });
             })
 
