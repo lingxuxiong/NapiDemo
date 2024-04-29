@@ -1,9 +1,12 @@
 #include "hello.h"
 #include "async.h"
+#include <cstddef>
+#include <cstdlib>
 
-typedef napi_value (*CALLBACK)(napi_env env, napi_callback_info info);
+typedef napi_value (*PromiseHandler)(napi_env env, napi_callback_info info);
 
-static napi_value printImageData(napi_env env, napi_callback_info info) {
+static napi_value handleFileDataPromise(napi_env env, napi_callback_info info) 
+{
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -12,7 +15,6 @@ static napi_value printImageData(napi_env env, napi_callback_info info) {
     void *data;    
     napi_status status = napi_get_arraybuffer_info(env, args[0], &data, &len);
     assert(status == napi_ok);
-    OH_LOG_DEBUG(LOG_APP, "file data len: %{public}zu", len);
 
     if (data != nullptr) {
         uint8_t *dataArr = static_cast<uint8_t *>(data);
@@ -24,58 +26,8 @@ static napi_value printImageData(napi_env env, napi_callback_info info) {
     return 0;
 }
 
-static void reject_callback(napi_env env, napi_value error, void *data) {
-    char buffer[128];
-    size_t buffer_size = 128;
-    size_t copied;
-
-    napi_status status = napi_get_value_string_utf8(env, error, buffer, buffer_size, &copied);
-    assert(status == napi_ok);
-
-    OH_LOG_DEBUG(LOG_APP, "Promise rejected with error: %s\n", buffer);
-}
-
-// Callback function for Promise resolution
-static napi_value ResolveCallback(napi_env env, napi_callback_info info) {
-    double result = 1.0;
-    OH_LOG_DEBUG(LOG_APP, "promise resolved with: %{public}f", result);
-    return 0;
-}
-
-// Callback function for Promise rejection
-static napi_value RejectCallback(napi_env env, napi_callback_info info) {
-    OH_LOG_DEBUG(LOG_APP, "promise gets rejected");
-    return 0;
-}
-
-static napi_value Add(napi_env env, napi_callback_info info)
+static napi_value resolvePromise(napi_env env, napi_callback_info info) 
 {
-    size_t requireArgc = 2;
-    size_t argc = 2;
-    napi_value args[2] = {nullptr};
-
-    napi_get_cb_info(env, info, &argc, args , nullptr, nullptr);
-
-    napi_valuetype valuetype0;
-    napi_typeof(env, args[0], &valuetype0);
-
-    napi_valuetype valuetype1;
-    napi_typeof(env, args[1], &valuetype1);
-
-    double value0;
-    napi_get_value_double(env, args[0], &value0);
-
-    double value1;
-    napi_get_value_double(env, args[1], &value1);
-
-    napi_value sum;
-    napi_create_double(env, value0 + value1, &sum);
-
-    return sum;
-
-}
-
-static napi_value resolveCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -87,7 +39,20 @@ static napi_value resolveCallback(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
-static napi_value rejectCallback(napi_env env, napi_callback_info info) {
+static char sFilePath[256] = "/data/storage/el2/base/haps/entry/files/sample.jpg";
+static napi_value resolveFilePathPromise(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    size_t len = 0;
+    napi_get_value_string_utf8(env, args[0], sFilePath, ARLEN(sFilePath), &len);
+    OH_LOG_DEBUG(LOG_APP, "got file path: %{public}s", sFilePath);
+    return nullptr;
+}
+
+static napi_value rejectPromise(napi_env env, napi_callback_info info) 
+{
     size_t argc = 1;
     napi_value args[1] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -100,45 +65,53 @@ static napi_value rejectCallback(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
-static napi_value handlePromise(napi_env env, napi_value promise, CALLBACK success, CALLBACK error) 
+static napi_value handlePromise(napi_env env, napi_value promise, PromiseHandler resolve, PromiseHandler reject) 
 {
     bool isPromise = false;
-    napi_is_promise(env, promise, &isPromise);
-    OH_LOG_DEBUG(LOG_APP, "isPromise: %{public}d", isPromise);
+    napi_is_promise(env, promise, &isPromise);    
     if (!isPromise) {
+        OH_LOG_DEBUG(LOG_APP, "not a promise");
         return nullptr;
     }
-
+    
     ///////////// Prepare to consume the promise /////////////
 
+    napi_status status;
+    
     // 1. Get the then property of the target promise
-    napi_value promiseThen;
-    napi_get_named_property(env, promise, "then", &promiseThen);
-
-    // 2. Create the then function of the promise
-    napi_value promiseThenFunc;
-    napi_create_function(env, "thenFunc", NAPI_AUTO_LENGTH, success, nullptr, &promiseThenFunc);
-
+    napi_value thenProp;
+    status = napi_get_named_property(env, promise, "then", &thenProp);
+    assert(status == napi_ok);
+    
+    // 2. Create the then function and associate it with the function to be called,
+    // so as to handle the data returned from the JS side.
+    napi_value thenFunc;
+    status = napi_create_function(env, "thenFunc", NAPI_AUTO_LENGTH, resolve, nullptr, &thenFunc);
+    assert(status == napi_ok);
+    
     // 3. Call the then function and return the call result
-    napi_value promiseResult;
-    napi_call_function(env, promise, promiseThen, 1, &promiseThenFunc, &promiseResult);
+    napi_value result;
+    status = napi_call_function(env, promise, thenProp, 1, &thenFunc, &result);
+    assert(status == napi_ok);
+    OH_LOG_DEBUG(LOG_APP, "then function was called from native");
 
+    // 4. Get the catch property for potential promise errors
+    napi_value catchProp;
+    napi_get_named_property(env, promise, "catch", &catchProp);
 
-    // 3. Catch promise error
-    napi_value promiseCatch;
-    napi_get_named_property(env, promise, "catch", &promiseCatch);
+    // 5. Create the catch function and associate it with the function to be called,
+    // so as to handle the error generated from the JS side.
+    napi_value catchFunc;
+    napi_create_function(env, "catchFunc", NAPI_AUTO_LENGTH, reject, nullptr, &catchFunc);
 
-    // 4. Create the catch function of the promise
-    napi_value promiseCatchFunc;
-    napi_create_function(env, "catchFunc", NAPI_AUTO_LENGTH, error, nullptr, &promiseCatchFunc);
+    // 6. Call the catch function for potential errors.
+    napi_call_function(env, promise, catchProp, 1, &catchFunc, &result);
 
-    // 5. Call the catch function and return the some error was caught
-    napi_call_function(env, promise, promiseCatch, 1, &promiseCatchFunc, &promiseResult);
-
-    return 0;
+    return nullptr;
 }
 
-static napi_value Promise(napi_env env, napi_callback_info info) { 
+static napi_value consumePromise(napi_env env, napi_callback_info info) 
+{ 
     napi_status status;
 
     size_t argc = 2;
@@ -167,89 +140,82 @@ static napi_value Promise(napi_env env, napi_callback_info info) {
     napi_is_promise(env, promise, &isPromise);
     OH_LOG_DEBUG(LOG_APP, "isPromise: %{public}d", isPromise);
     
-    return handlePromise(env, promise, resolveCallback, rejectCallback);
+    return handlePromise(env, promise, resolvePromise, rejectPromise);
 }
 
 
-static napi_value Print(napi_env env, napi_callback_info info) {
+static napi_value Print(napi_env env, napi_callback_info info) 
+{
+    napi_status status;
 
-        napi_status status;
+    size_t argc = 3;
+    napi_value args[3] = {nullptr};
+    status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    assert(status == napi_ok);
 
-        size_t argc = 3;
-        napi_value args[3] = {nullptr};
-        status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-        assert(status == napi_ok);
+    napi_value id = args[0];
+    napi_value filePathCallback = args[1];
+    napi_value fileDataCallback = args[2];
+    
+    int identifier = 0;
+    status = napi_get_value_int32(env, id, &identifier);
+    assert(status == napi_ok);
+    OH_LOG_DEBUG(LOG_APP, "id: %{public}d", identifier);
+    
+    int32_t pageNum = rand() % 100;
+    napi_value pageNumArg;
+    status = napi_create_int32(env, pageNum, &pageNumArg);
+    assert(status == napi_ok);
+    
+    napi_value filePathCallbackArgs[] = { pageNumArg };
+    napi_value filePathPromise = nullptr;    
+    status = napi_call_function(env, nullptr, filePathCallback, 
+    ARLEN(filePathCallbackArgs), filePathCallbackArgs,&filePathPromise);
+    assert(status == napi_ok);
 
-        napi_value val = args[0];
-        int id = 0;
-        status = napi_get_value_int32(env, val, &id);
-        assert(status == napi_ok);
-        OH_LOG_DEBUG(LOG_APP, "id: %{public}d", id);
+    napi_value result = handlePromise(env, filePathPromise, 
+    resolveFilePathPromise,rejectPromise);
+    
+    OH_LOG_DEBUG(LOG_APP, "current file path: %{public}s", sFilePath);
+    size_t len = strlen(sFilePath);
+    assert(len != 0);
+    napi_value filePathArg;
+    status = napi_create_string_utf8(env, sFilePath, len, &filePathArg);
+    assert(status == napi_ok);
+    
+    napi_value fileDataCallbackArgs[] = { filePathArg };
+    napi_value fileDataPromise = nullptr;
+    status = napi_call_function(env, nullptr, fileDataCallback, 
+    ARLEN(fileDataCallbackArgs), fileDataCallbackArgs, &fileDataPromise);
+    assert(status == napi_ok);
 
-        napi_value filePathCallback = args[1];
-        int32_t num = 1;
-        napi_value pageNumArg;
-        status = napi_create_int32(env, num, &pageNumArg);
-        assert(status == napi_ok);
+    result = handlePromise(env, fileDataPromise, 
+    handleFileDataPromise,rejectPromise);
 
-        napi_value ret;
+    return result;
+}
 
-        napi_value filePathCallbackArgs[] = {pageNumArg};
-        napi_value filePathPromise = nullptr;
-        status = napi_call_function(env, nullptr, filePathCallback, ARLEN(filePathCallbackArgs),
-                                    filePathCallbackArgs,&filePathPromise);
-        assert(status == napi_ok);
+EXTERN_C_START
+static napi_value Init(napi_env env, napi_value exports) 
+{
+    napi_property_descriptor desc[] = {
+        {"print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"producePromise", nullptr, producePromise, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"consumePromise", nullptr, consumePromise, nullptr, nullptr, nullptr, napi_default, nullptr}};
+    napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
+    return exports;
+}
+EXTERN_C_END
 
-        ret = handlePromise(
-            env, filePathPromise,
-            [](napi_env env, napi_callback_info info) -> napi_value {
-                size_t argc = 1;
-                napi_value args[1] = {nullptr};
-                napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-                char filePath[256] = {'\0'};
-                size_t len = 0;
-                napi_get_value_string_utf8(env, args[0], filePath, 256, &len);
-                OH_LOG_DEBUG(LOG_APP, "got file path for page %{public}s", filePath);
-                return nullptr;
-            }, rejectCallback);
+static napi_module demoModule = 
+{
+    .nm_version = 1,
+    .nm_flags = 0,
+    .nm_filename = nullptr,
+    .nm_register_func = Init,
+    .nm_modname = "entry",
+    .nm_priv = ((void *)0),
+    .reserved = {0},
+};
 
-        napi_value filePathArg;
-        const char *filePath = "/data/storage/el2/base/haps/entry/files/sample.jpg";
-        status = napi_create_string_utf8(env, filePath, strlen(filePath), &filePathArg);
-        assert(status == napi_ok);
-
-        napi_value fileDataCallback = args[2];
-        napi_value fileDataCallbackArgs[] = { filePathArg };
-        napi_value fileDataPromise = nullptr;
-        status = napi_call_function(env, nullptr, fileDataCallback, ARLEN(fileDataCallbackArgs), 
-                                    fileDataCallbackArgs, &fileDataPromise);
-        assert(status == napi_ok);
-
-        ret = handlePromise(env, fileDataPromise, printImageData,rejectCallback);
-
-        return ret;
-    }
-
-    EXTERN_C_START
-    static napi_value Init(napi_env env, napi_value exports) {
-        napi_property_descriptor desc[] = {
-            {"add", nullptr, Add, nullptr, nullptr, nullptr, napi_default, nullptr},
-            {"print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr},
-            {"asyncWork", nullptr, AsyncWork, nullptr, nullptr, nullptr, napi_default, nullptr},
-            {"callWithPromise", nullptr, Promise, nullptr, nullptr, nullptr, napi_default, nullptr}};
-        napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
-        return exports;
-    }
-    EXTERN_C_END
-
-    static napi_module demoModule = {
-        .nm_version = 1,
-        .nm_flags = 0,
-        .nm_filename = nullptr,
-        .nm_register_func = Init,
-        .nm_modname = "entry",
-        .nm_priv = ((void *)0),
-        .reserved = {0},
-    };
-
-    extern "C" __attribute__((constructor)) void RegisterEntryModule(void) { napi_module_register(&demoModule); }
+extern "C" __attribute__((constructor)) void RegisterEntryModule(void) { napi_module_register(&demoModule); }

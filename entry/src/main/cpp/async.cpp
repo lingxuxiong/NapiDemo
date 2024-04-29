@@ -6,7 +6,8 @@
 
 #include "hello.h"
 
-struct CallbackData {
+struct CallbackData 
+{
     napi_async_work asyncWork = nullptr;
     napi_deferred deferred = nullptr;
     napi_ref callback = nullptr;
@@ -14,13 +15,15 @@ struct CallbackData {
     int result = 0;
 };
 
-static void ExecuteCB(napi_env env, void *data) {
+static void ExecuteCB(napi_env env, void *data) 
+{
     CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
     callbackData->result = callbackData->args;
     OH_LOG_DEBUG(LOG_APP, "async task ended up with result: %{public}d", callbackData->result);
 }
 
-static void CompleteCB(napi_env env, napi_status status, void *data) {
+static void CompleteCB(napi_env env, napi_status status, void *data) 
+{
     CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
     napi_value result = nullptr;
     napi_create_int32(env, callbackData->result, &result);
@@ -34,7 +37,8 @@ static void CompleteCB(napi_env env, napi_status status, void *data) {
     delete callbackData;
 }
 
-napi_value AsyncWork(napi_env env, napi_callback_info info) {
+napi_value producePromise(napi_env env, napi_callback_info info) 
+{
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);

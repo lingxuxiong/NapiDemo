@@ -16,38 +16,37 @@ struct Index {
   build() {
     Row() {
       Column() {
-        Text(this.message)
-          .fontSize(50)
-          .fontWeight(FontWeight.Bold)
-          .onClick(() => {
-            hilog.info(0x0000, LOG_TAG, 'Test NAPI 2 + 3 = %{public}d', DemoSDK.add(2, 3));
-          })
-
         Image($rawfile("sample.jpg"))
           .alignSelf(ItemAlign.Center)
           .width(400)
           .height(400)
 
+        Button("Produce Promise")
+          .onClick(() => {
+            DemoSDK.producePromise(1024).then((result) => {
+              hilog.info(0x0000, LOG_TAG, 'async result %{public}d', result);
+            }).catch((error : Error) => {
+              hilog.error(0x0000, LOG_TAG, 'failed to get async task due to error: ' + error.message);
+            });
+          })
+
+        Button("Consume Promise")
+          .onClick(() => {
+            this.num++;
+            DemoSDK.consumePromise(this.num, (doubledNum: number) => {
+              return new Promise<string>((resolve, reject) => {
+                hilog.info(0x0000, LOG_TAG, 'new counter value = %{public}d', this.num);
+                if (this.num % 2 == 0) {
+                  resolve("resolved: " + doubledNum.toString());
+                } else {
+                  reject("rejected: " + doubledNum.toString());
+                }
+              });
+            })
+          })
+
         Button("Print Image")
           .onClick(() => {
-            // this.num++;
-            // DemoSDK.callWithPromise(this.num, (doubledNum: number) => {
-            //   return new Promise<string>((resolve, reject) => {
-            //     hilog.info(0x0000, LOG_TAG, 'new counter value = %{public}d', this.num);
-            //     if (this.num % 2 == 0) {
-            //       resolve("resolved: " + doubledNum.toString());
-            //     } else {
-            //       reject("rejected: " + doubledNum.toString());
-            //     }
-            //   });
-            // })
-
-            // DemoSDK.asyncWork(1024).then((result) => {
-            //   hilog.info(0x0000, LOG_TAG, 'async result %{public}d', result);
-            // }).catch((error : Error) => {
-            //   hilog.error(0x0000, LOG_TAG, 'failed to get async task due to error: ' + error.message);
-            // });
-
             // copy the sample raw file to external storage to simulate the file to print
             ImageUtils.copyRawFile(getContext(this), SAMPLE_FILE_NAME);
 

@@ -9,6 +9,6 @@
 
 #include "napi/native_api.h"
 
-napi_value AsyncWork(napi_env env, napi_callback_info info);
+napi_value producePromise(napi_env env, napi_callback_info info);
 
 #endif //NAPIDEMO_ASYNC_H
