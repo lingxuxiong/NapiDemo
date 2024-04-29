@@ -24,7 +24,7 @@ struct Index {
         Button("Produce Promise")
           .onClick(() => {
             DemoSDK.producePromise(1024).then((result) => {
-              hilog.info(0x0000, LOG_TAG, 'async result %{public}d', result);
+              hilog.info(0x0000, LOG_TAG, 'got async result %{public}d', result);
             }).catch((error : Error) => {
               hilog.error(0x0000, LOG_TAG, 'failed to get async task due to error: ' + error.message);
             });
@@ -35,7 +35,7 @@ struct Index {
             this.num++;
             DemoSDK.consumePromise(this.num, (doubledNum: number) => {
               return new Promise<string>((resolve, reject) => {
-                hilog.info(0x0000, LOG_TAG, 'new counter value = %{public}d', this.num);
+                hilog.info(0x0000, LOG_TAG, 'new num value = %{public}d', this.num);
                 if (this.num % 2 == 0) {
                   resolve("resolved: " + doubledNum.toString());
                 } else {

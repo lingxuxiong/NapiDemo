@@ -14,6 +14,4 @@
 #define LOG_DOMAIN 0x0001
 #define LOG_TAG "NapiDemo"
 
-#define ARLEN(a) sizeof(a) / sizeof(a[0])
-
 #endif //NAPIDEMO_HELLO_H

@@ -9,11 +9,16 @@
 
 #include "napi/native_api.h"
 
+#define ARLEN(a) sizeof(a) / sizeof(a[0])
+
 typedef napi_value (*PromiseHandler)(napi_env env, napi_callback_info info);
 
 napi_value handlePromise(napi_env env, napi_value promise, PromiseHandler resolve, PromiseHandler reject);
 
 napi_value producePromise(napi_env env, napi_callback_info info);
 napi_value consumePromise(napi_env env, napi_callback_info info);
+
+napi_value resolvePromise(napi_env env, napi_callback_info info);
+napi_value rejectPromise(napi_env env, napi_callback_info info);
 
 #endif //NAPIDEMO_PROMISE_H
