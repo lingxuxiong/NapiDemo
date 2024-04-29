@@ -1,5 +1,6 @@
 #include "napi/native_api.h"
 #include <assert.h>
+#include <cstring>
 
 #undef LOG_DOMAIN
 #undef LOG_TAG
@@ -63,21 +64,25 @@ static napi_value AsyncWork(napi_env env, napi_callback_info info) {
     return promise;
 }
 
-static void resolve_callback(napi_env env, napi_value result, void *data) {
-    napi_typedarray_type type;
-    napi_value buf;
-    size_t offset;
+static napi_value printImageData(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    
     size_t len;
-    napi_status status = napi_get_typedarray_info(env, result, &type, &len, &data, &buf, &offset);
-    // assert(status == napi_ok);
-    OH_LOG_DEBUG(LOG_APP, "file data len: %{public}zu, type: %{public}d, offset: %{public}zu", len, type, offset);
+    void *data;    
+    napi_status status = napi_get_arraybuffer_info(env, args[0], &data, &len);
+    assert(status == napi_ok);
+    OH_LOG_DEBUG(LOG_APP, "file data len: %{public}zu", len);
 
-    if (type == napi_uint8_array) {
+    if (data != nullptr) {
         uint8_t *dataArr = static_cast<uint8_t *>(data);
-        for (size_t i = 0; i < len; ++i) {
+        for (size_t i = 0; i < 100; ++i) {
             OH_LOG_DEBUG(LOG_APP, "data[%{public}zu]: %{public}d", i, dataArr[i]);
         }
     }
+    
+    return 0;
 }
 
 static void reject_callback(napi_env env, napi_value error, void *data) {
@@ -95,11 +100,13 @@ static void reject_callback(napi_env env, napi_value error, void *data) {
 static napi_value ResolveCallback(napi_env env, napi_callback_info info) {
     double result = 1.0;
     OH_LOG_DEBUG(LOG_APP, "promise resolved with: %{public}f", result);
+    return 0;
 }
 
 // Callback function for Promise rejection
 static napi_value RejectCallback(napi_env env, napi_callback_info info) {
     OH_LOG_DEBUG(LOG_APP, "promise gets rejected");
+    return 0;
 }
 
 static napi_value Add(napi_env env, napi_callback_info info)
@@ -246,64 +253,42 @@ static napi_value Print(napi_env env, napi_callback_info info) {
         status = napi_create_int32(env, num, &pageNumArg);
         assert(status == napi_ok);
 
+        napi_value ret;
+
         napi_value filePathCallbackArgs[] = {pageNumArg};
-        napi_value resultPromise = nullptr;
-        status = napi_call_function(env, nullptr, filePathCallback, ARLEN(filePathCallbackArgs), filePathCallbackArgs,
-                                    &resultPromise);
+        napi_value filePathPromise = nullptr;
+        status = napi_call_function(env, nullptr, filePathCallback, ARLEN(filePathCallbackArgs),
+                                    filePathCallbackArgs,&filePathPromise);
         assert(status == napi_ok);
 
+        ret = handlePromise(
+            env, filePathPromise,
+            [](napi_env env, napi_callback_info info) -> napi_value {
+                size_t argc = 1;
+                napi_value args[1] = {nullptr};
+                napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+                char filePath[256] = {'\0'};
+                size_t len = 0;
+                napi_get_value_string_utf8(env, args[0], filePath, 256, &len);
+                OH_LOG_DEBUG(LOG_APP, "got file path for page %{public}s", filePath);
+                return nullptr;
+            }, rejectCallback);
 
-        auto successCbA = [](napi_env env, napi_callback_info info) -> napi_value {
-            size_t argc = 1;
-            napi_value args[1] = {nullptr};
-            napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-            char filePath[256] = {'\0'};
-            size_t len = 0;
-            napi_get_value_string_utf8(env, args[0], filePath, 256, &len);
-            OH_LOG_DEBUG(LOG_APP, "got file path for page %{public}s", filePath);
+        napi_value filePathArg;
+        const char *filePath = "/data/storage/el2/base/haps/entry/files/sample.jpg";
+        status = napi_create_string_utf8(env, filePath, strlen(filePath), &filePathArg);
+        assert(status == napi_ok);
 
-            napi_value undefined;
-            napi_get_undefined(env, &undefined);
-            return undefined;
-        };
+        napi_value fileDataCallback = args[2];
+        napi_value fileDataCallbackArgs[] = { filePathArg };
+        napi_value fileDataPromise = nullptr;
+        status = napi_call_function(env, nullptr, fileDataCallback, ARLEN(fileDataCallbackArgs), 
+                                    fileDataCallbackArgs, &fileDataPromise);
+        assert(status == napi_ok);
 
-        napi_value promiseThen;
-        napi_get_named_property(env, resultPromise, "then", &promiseThen);
-        napi_value successFunA;
-        napi_create_function(env, "successFunc", NAPI_AUTO_LENGTH, successCbA, nullptr, &successFunA);
-        napi_value ret;
-        napi_call_function(env, resultPromise, promiseThen, 1, &successFunA, &ret);
+        ret = handlePromise(env, fileDataPromise, printImageData,rejectCallback);
 
-
-        //     char filePath[256] = {'\0'};
-        size_t len = 0;
-        //     status = napi_get_value_string_utf8(env, result, filePath, 256, &len);
-        //     assert(status == napi_ok);
-        //     OH_LOG_DEBUG(LOG_APP, "got file path for page %{public}d: %{public}s", pageNum, filePath);
-
-        //     napi_value fileDataCallback = args[2];
-        //     napi_value fileDataCallbackArgs[] = { result };
-        //     cbArgc = sizeof(fileDataCallbackArgs) / sizeof(fileDataCallbackArgs[0]);
-        //     status = napi_call_function(env, nullptr, fileDataCallback, cbArgc, fileDataCallbackArgs, &result);
-        //     assert(status == napi_ok);
-        //
-        //     napi_typedarray_type type;
-        //     napi_value buf;
-        //     size_t offset;
-        //     void *data;
-        //     status = napi_get_typedarray_info(env, result, &type, &len, &data, &buf, &offset);
-        //     //assert(status == napi_ok);
-        //     OH_LOG_DEBUG(LOG_APP, "file data len: %{public}zu, type: %{public}d, offset: %{public}zu", len, type,
-        //     offset);
-        //
-        //     if (type == napi_uint8_array) {
-        //         uint8_t *dataArr = static_cast<uint8_t *>(data);
-        //         for (size_t i = 0; i < len; ++i) {
-        //             OH_LOG_DEBUG(LOG_APP, "data[%{public}zu]: %{public}d", i, dataArr[i]);
-        //         }
-        //     }
-
-        return 0;
+        return ret;
     }
 
     EXTERN_C_START
