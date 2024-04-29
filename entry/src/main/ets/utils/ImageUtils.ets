@@ -25,6 +25,19 @@ export class ImageUtils {
     return pixelMap;
   }
 
+  static async pixelDataOfFile(filePath: string): Promise<ArrayBuffer> {
+    const imageSource = image.createImageSource(filePath);
+    const pixelMap = await imageSource.createPixelMap({
+      editable: true,
+      desiredPixelFormat: 3,
+    })
+
+    let len = pixelMap.getPixelBytesNumber()
+    let data = new ArrayBuffer(len)
+    await pixelMap.readPixelsToBuffer(data)
+    return data
+  }
+
   static async pixelMapOfRawImageFile(context: Context, fileName: string): Promise<image.PixelMap> {
     const rm = context.resourceManager;
     const fileData = await rm.getRawFileContent(fileName);

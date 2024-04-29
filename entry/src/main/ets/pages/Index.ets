@@ -42,6 +42,12 @@ struct Index {
               });
             })
 
+            // DemoSDK.asyncWork(1024).then((result) => {
+            //   hilog.info(0x0000, LOG_TAG, 'async result %{public}d', result);
+            // }).catch((error : Error) => {
+            //   hilog.error(0x0000, LOG_TAG, 'failed to get async task due to error: ' + error.message);
+            // });
+
             // copy the sample raw file to external storage to simulate the file to print
             // ImageUtils.copyRawFile(getContext(this), SAMPLE_FILE_NAME);
             //

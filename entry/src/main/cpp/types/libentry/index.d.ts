@@ -10,3 +10,5 @@ export const print: (
   filePathCallback: (pageNum: number) => Promise<String>,
   fileDataCallback: (filePath: string) => Promise<ArrayBuffer>)
 => void;
+
+export const asyncWork: (num: number) => Promise<number>;

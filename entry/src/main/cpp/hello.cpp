@@ -10,6 +10,97 @@
 
 #define ARLEN(a) sizeof(a)/sizeof(a[0])
 
+struct CallbackData {
+    napi_async_work asyncWork = nullptr;
+    napi_deferred deferred = nullptr;
+    napi_ref callback = nullptr;
+    int args = 0;
+    int result = 0;
+};
+
+static void ExecuteCB(napi_env env, void *data) {
+    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
+    callbackData->result = callbackData->args;
+    OH_LOG_DEBUG(LOG_APP, "async task ended up with result: %{public}d", callbackData->result);
+}
+
+static void CompleteCB(napi_env env, napi_status status, void *data) {
+    CallbackData *callbackData = reinterpret_cast<CallbackData *>(data);
+    napi_value result = nullptr;
+    napi_create_int32(env, callbackData->result, &result);
+    callbackData->result > 0 ? napi_resolve_deferred(env, callbackData->deferred, result)
+                             : napi_reject_deferred(env, callbackData->deferred, result);
+
+    napi_delete_async_work(env, callbackData->asyncWork);
+
+    OH_LOG_DEBUG(LOG_APP, "complete async task");
+
+    delete callbackData;
+}
+
+static napi_value AsyncWork(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    napi_value promise = nullptr;
+    napi_deferred deferred = nullptr;
+    napi_create_promise(env, &deferred, &promise);
+
+    auto callbackData = new CallbackData();
+    callbackData->deferred = deferred;
+    napi_get_value_int32(env, args[0], &callbackData->args);
+
+    napi_value resourceName = nullptr;
+    napi_create_string_utf8(env, "AsyncCallback", NAPI_AUTO_LENGTH, &resourceName);
+
+    napi_create_async_work(env, nullptr, resourceName, ExecuteCB, CompleteCB, callbackData, &callbackData->asyncWork);
+    napi_queue_async_work(env, callbackData->asyncWork);
+
+    OH_LOG_DEBUG(LOG_APP, "created async task");
+
+    return promise;
+}
+
+static void resolve_callback(napi_env env, napi_value result, void *data) {
+    napi_typedarray_type type;
+    napi_value buf;
+    size_t offset;
+    size_t len;
+    napi_status status = napi_get_typedarray_info(env, result, &type, &len, &data, &buf, &offset);
+    // assert(status == napi_ok);
+    OH_LOG_DEBUG(LOG_APP, "file data len: %{public}zu, type: %{public}d, offset: %{public}zu", len, type, offset);
+
+    if (type == napi_uint8_array) {
+        uint8_t *dataArr = static_cast<uint8_t *>(data);
+        for (size_t i = 0; i < len; ++i) {
+            OH_LOG_DEBUG(LOG_APP, "data[%{public}zu]: %{public}d", i, dataArr[i]);
+        }
+    }
+}
+
+static void reject_callback(napi_env env, napi_value error, void *data) {
+    char buffer[128];
+    size_t buffer_size = 128;
+    size_t copied;
+
+    napi_status status = napi_get_value_string_utf8(env, error, buffer, buffer_size, &copied);
+    assert(status == napi_ok);
+
+    OH_LOG_DEBUG(LOG_APP, "Promise rejected with error: %s\n", buffer);
+}
+
+// Callback function for Promise resolution
+static napi_value ResolveCallback(napi_env env, napi_callback_info info) {
+    double result = 1.0;
+    OH_LOG_DEBUG(LOG_APP, "promise resolved with: %{public}f", result);
+}
+
+// Callback function for Promise rejection
+static napi_value RejectCallback(napi_env env, napi_callback_info info) {
+    OH_LOG_DEBUG(LOG_APP, "promise gets rejected");
+}
+
 static napi_value Add(napi_env env, napi_callback_info info)
 {
     size_t requireArgc = 2;
@@ -208,9 +299,11 @@ static napi_value Print(napi_env env, napi_callback_info info) {
 
     EXTERN_C_START
     static napi_value Init(napi_env env, napi_value exports) {
-        napi_property_descriptor desc[] = {{"add", nullptr, Add, nullptr, nullptr, nullptr, napi_default, nullptr},
-                                           {"print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr},
-                                           {"callWithPromise", nullptr, Promise, nullptr, nullptr, nullptr, napi_default, nullptr}};
+        napi_property_descriptor desc[] = {
+            {"add", nullptr, Add, nullptr, nullptr, nullptr, napi_default, nullptr},
+            {"print", nullptr, Print, nullptr, nullptr, nullptr, napi_default, nullptr},
+            {"asyncWork", nullptr, AsyncWork, nullptr, nullptr, nullptr, napi_default, nullptr},
+            {"callWithPromise", nullptr, Promise, nullptr, nullptr, nullptr, napi_default, nullptr}};
         napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
         return exports;
     }
