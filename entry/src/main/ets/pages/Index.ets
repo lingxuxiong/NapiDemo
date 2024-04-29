@@ -29,36 +29,49 @@ struct Index {
         Button("Print Image")
           .onClick(() => {
 
+            DemoSDK.callWithPromise(10, (doubledNum: number) => {
+              return new Promise<string>((resolve, reject) => {
+                resolve(doubledNum.toString());
+              });
+            })
+
             // copy the sample raw file to external storage to simulate the file to print
-            ImageUtils.copyRawFile(getContext(this), SAMPLE_FILE_NAME);
-
-            let jobId = 1;
-
-            DemoSDK.print(jobId,
-              (pageNum: number) => {
-                let filePath = getContext(this).filesDir + "/" + SAMPLE_FILE_NAME;
-                hilog.info(0x0000, LOG_TAG, 'prepared file path for page %{public}d: %{public}s', pageNum, filePath);
-                return filePath;
-              },
-              (filePath: string) => {
-                hilog.info(0x0000, LOG_TAG, 'ask file data for path: %{public}s', filePath);
-
-                // return image data on filePath
-                ImageUtils.pixelMapOfFile(filePath).then( pm => {
-                  let len = pm.getPixelBytesNumber()
-                  let data = new ArrayBuffer(len)
-                  pm.readPixelsToBuffer(data).then( () => {
-                    console.log('Succeeded in reading image pixel data.');
-                  }).catch((error : Error) => {
-                    console.error('failed to read image pixel data due to error: ' + error.message);
-                  });
-                }).catch((error : Error) => {
-                  console.error('failed to read pixel map due to error: ' + error.message);
-                });
+            // ImageUtils.copyRawFile(getContext(this), SAMPLE_FILE_NAME);
+            //
+            // let jobId = 1;
+            //
+            // DemoSDK.print(jobId,
+            //   (pageNum: number) => {
+            //     return new Promise<string>((resolve, reject) => {
+            //       let filePath = getContext(this).filesDir + "/" + SAMPLE_FILE_NAME;
+            //       hilog.info(0x0000, LOG_TAG, 'prepared file path for page %{public}d: %{public}s', pageNum, filePath);
+            //       resolve(filePath);
+            //     });
+            //   },
+            //
+            //   (filePath: string) => {
+            //     hilog.info(0x0000, LOG_TAG, 'ask file data for path: %{public}s', filePath);
+            //     return new Promise<ArrayBuffer>((resolve, reject) => {
+            //       // return image data on filePath
+            //       ImageUtils.pixelMapOfFile(filePath).then( pm => {
+            //         let len = pm.getPixelBytesNumber()
+            //         let data = new ArrayBuffer(len)
+            //         pm.readPixelsToBuffer(data).then( () => {
+            //           console.log('Succeeded in reading image pixel data.');
+            //           resolve(data);
+            //         }).catch((error : Error) => {
+            //           reject(error);
+            //           console.error('failed to read image pixel data due to error: ' + error.message);
+            //         });
+            //       }).catch((error : Error) => {
+            //         reject(error);
+            //         console.error('failed to read pixel map due to error: ' + error.message);
+            //       });
+            //     });
 
                 // return fake data
-                return ImageUtils.fakeDataArray();
-            });
+                // return ImageUtils.fakeDataArray();
+            // });
           })
       }
       .width('100%')
