@@ -1,7 +1,8 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { ImageUtils } from '../utils/ImageUtils';
 
 import DemoSDK from 'libentry.so';
-import { ImageUtils } from '../utils/ImageUtils';
+DemoSDK.JSBind.bindFunction("pixelDataOfFile", ImageUtils.pixelDataOfFile);
 
 let LOG_TAG = "NAPIDemo"
 let SAMPLE_FILE_NAME = "sample.jpg"

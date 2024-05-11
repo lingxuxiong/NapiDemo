@@ -10,3 +10,7 @@ export const print: (
   filePathCallback: (pageNum: number) => Promise<String>,
   fileDataCallback: (filePath: string) => Promise<ArrayBuffer>)
 => void;
+
+export class JSBind {
+  static bindFunction(name: string, func: Function): number;
+}
