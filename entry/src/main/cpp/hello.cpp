@@ -87,18 +87,31 @@ static napi_value Print(napi_env env, napi_callback_info info)
     status = napi_create_string_utf8(env, sFilePath, len, &filePathArg);
     assert(status == napi_ok);
     
+///////////     Handle JS Promise in NAPI way    ///////////////
 //     napi_value fileDataCallbackArgs[] = { filePathArg };
 //     napi_value fileDataPromise = nullptr;
 //     status = napi_call_function(env, nullptr, fileDataCallback, 
 //     ARLEN(fileDataCallbackArgs), fileDataCallbackArgs, &fileDataPromise);
 //     assert(status == napi_ok);
 //     result = handlePromise(env, fileDataPromise, handleFileDataPromise, rejectPromise);
-    
+
+///////////     Handle JS Promise in hybrid way    ///////////////
     auto fileDataFunc = aki::JSBind::GetJSFunction("pixelDataOfFile");
     auto fileDataPromise = fileDataFunc->Invoke<aki::Promise>(sFilePath);
     napi_value napiPromise = fileDataPromise.GetHandle();
     AKI_LOG(INFO) << "got promise from JS: " << napiPromise;
     result = handlePromise(env, napiPromise, handleFileDataPromise, rejectPromise);
+
+///////////     Handle JS Promise in pure AKI way    ///////////////
+//     auto fileDataFunc = aki::JSBind::GetJSFunction("pixelDataOfFile");
+//     auto fileDataPromise = fileDataFunc->Invoke<aki::Promise>(sFilePath);
+//     napi_value napiPromise = fileDataPromise.GetHandle();
+//     AKI_LOG(INFO) << "got promise from JS: " << napiPromise;
+//     result = handlePromise(env, napiPromise, handleFileDataPromise, rejectPromise);
+//     TODO: replace handlePromise with Then() and Catch() promise functions
+//     Sample Pseudocode
+//     aki::value data, error;
+//     fileDataPromise.Then(&data);.Catch(&error);
 
     return result;
 }
