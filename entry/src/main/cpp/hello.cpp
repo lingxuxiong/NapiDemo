@@ -3,7 +3,16 @@
 #include <cstddef>
 #include <cstdlib>
 #include <hilog/log.h>
-#include <cstring>
+#include <aki/jsbind.h>
+
+// Register AKI Addon
+// Some notes that should be kept in mind
+// 1. addonName should be the same as the module name in NAPI context.
+// 2. AKI Addon registration should be declared before NAPI module registration,
+// before RegisterEntryModule specifically, in order for AKI & NAPI
+// hybrid development to work as expected. Otherwise, AKI bindings
+// will be ignored.
+JSBIND_ADDON(entry)
 
 static char sFilePath[256] = "/data/storage/el2/base/haps/entry/files/sample.jpg";
 
@@ -98,6 +107,7 @@ static napi_value Init(napi_env env, napi_value exports)
         {"producePromise", nullptr, producePromise, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"consumePromise", nullptr, consumePromise, nullptr, nullptr, nullptr, napi_default, nullptr}};
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
+    exports = aki::JSBind::BindSymbols(env, exports);
     return exports;
 }
 EXTERN_C_END
